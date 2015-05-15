@@ -3,13 +3,16 @@ package com.github.dnvriend.activemq
 import akka.actor.ActorSystem
 import akka.camel.{Camel, CamelExtension}
 import akka.event.Logging
-import com.github.dnvriend.activemq.CamelComponent
-import org.apache.camel.{Component, CamelContext}
+import org.apache.camel.{ProducerTemplate, ConsumerTemplate, Component, CamelContext}
 
 object CamelHelper {
   def apply(system: ActorSystem): Camel = CamelExtension(system)
 
   def apply(camel: Camel): CamelContext = camel.context
+
+  def consumerTemplate()(implicit system: ActorSystem): ConsumerTemplate = CamelExtension(system).context.createConsumerTemplate()
+
+  def producerTemplate()(implicit system: ActorSystem): ProducerTemplate = CamelExtension(system).context.createProducerTemplate()
 
   def addComponent(camelComponent: CamelComponent)(implicit system: ActorSystem): CamelContext = {
     val camelContext = CamelExtension(system).context
@@ -17,7 +20,7 @@ object CamelHelper {
     Option(camelContext.getComponent(camelComponent.name)).map { comp =>
       camelContext.removeComponent(camelComponent.name)
       camelContext.addComponent(camelComponent.name, getComponent(camelComponent))
-      log.info(s"Found camel component '${camelComponent.name}' in the CamelContext, removing old component one and adding a new configured instance")
+      log.info("Found camel component '{}' in the CamelContext, removing old component one and adding a new configured instance", camelComponent.name)
     }.getOrElse {
       log.info(s"No camel component ${camelComponent.name}, found, adding a new instance")
       camelContext.addComponent(camelComponent.name, getComponent(camelComponent))

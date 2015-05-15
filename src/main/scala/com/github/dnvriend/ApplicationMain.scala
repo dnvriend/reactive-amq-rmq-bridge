@@ -5,12 +5,12 @@ import akka.camel.{CamelMessage, Consumer, Oneway, Producer}
 import akka.event.{Logging, LoggingAdapter, LoggingReceive}
 import akka.stream.actor.ActorPublisherMessage.{Cancel, Request}
 import akka.stream.actor.ActorSubscriberMessage.{OnComplete, OnError, OnNext}
-import akka.stream.actor.{ActorPublisher, ActorSubscriber, MaxInFlightRequestStrategy, RequestStrategy}
+import akka.stream.actor._
 import akka.stream.scaladsl._
-import akka.stream.{ActorFlowMaterializer, FlowMaterializer, OverflowStrategy}
+import akka.stream.{ActorFlowMaterializer, OverflowStrategy}
 import akka.util.{ByteString, Timeout}
 import com.github.dnvriend.activemq.{ActiveMqComponent, CamelHelper}
-import com.github.dnvriend.rabbitmq.{RabbitRegistry, RabbitConnection}
+import com.github.dnvriend.rabbitmq.{RabbitConnection, RabbitRegistry}
 import io.scalac.amqp._
 
 import scala.annotation.tailrec
@@ -45,7 +45,7 @@ object ApplicationMain extends App {
   val mapToRouted = Flow[Long].map (number => Routed(routingKey = "", Message(body = ByteString(number.toString))))
   val mapToMessage = Flow[Long].map (number => Message(body = ByteString(number)))
   val rabbitSink: Sink[Routed, Unit] = Sink(connection.publish(RabbitRegistry.outboundNumbersExchange.name))
-  Source.actorPublisher(Props(new JmsConsumer(queueName)))
+  Source.actorPublisher(Props(new JmsConsumer[Long](queueName)))
     .via(mapToRouted)
     .runWith(rabbitSink)
 
@@ -59,14 +59,14 @@ object ApplicationMain extends App {
   system.awaitTermination()
 }
 
-class JmsConsumer(queueName: String) extends Consumer with ActorPublisher[Long] with ActorLogging {
+class JmsConsumer[T](queueName: String) extends Consumer with ActorPublisher[T] with ActorLogging {
   override def endpointUri: String = "activemq:" + queueName
 
-  var buf = Vector.empty[Long]
+  var buf = Vector.empty[T]
 
   override def receive: Receive = LoggingReceive {
-    case msg @ CamelMessage(body: Long, headers) =>
-      buf = buf :+ body
+    case msg @ CamelMessage(body, headers) =>
+      buf = buf :+ body.asInstanceOf[T]
       log.info("Buffer size: {}", buf.size)
       if(totalDemand > 0) deliverBuf()
 
@@ -93,8 +93,6 @@ class JmsConsumer(queueName: String) extends Consumer with ActorPublisher[Long] 
         use foreach onNext
         deliverBuf()
       }
-    } else {
-      log.info("NOT DOING DELIVERBUF: totalDemand: {}", totalDemand)
     }
 
   def stop(): Unit = {
@@ -114,17 +112,13 @@ class JmsConsumer(queueName: String) extends Consumer with ActorPublisher[Long] 
 
 class JmsProducer(queueName: String) extends Producer with Oneway with ActorLogging with ActorSubscriber {
   override def endpointUri: String = "activemq:" + queueName
-  var inFlight = 0
-  override protected def requestStrategy: RequestStrategy =
-    new MaxInFlightRequestStrategy(max = 1) {
-      override def inFlightInternally: Int = inFlight
-    }
+
+  override protected def requestStrategy: RequestStrategy = ZeroRequestStrategy
+
+  request(1)
 
   override protected def produce: Receive = {
-    case OnNext(msg: Long)                      =>
-      inFlight += 1
-      super.produce(msg)
-      inFlight -= 1
+    case OnNext(msg: Long)                      => super.produce(msg); request(1)
     case msg: NoSerializationVerificationNeeded => super.produce(msg)
     case OnComplete                             => stop();
     case OnError(t)                             => stop()
