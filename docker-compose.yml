@@ -1,0 +1,15 @@
+activemq:
+  image: rmohr/activemq:5.10.0
+  ports:
+    - "61616:61616" # broker (admin:adminactivemq)(amq:amq)
+    - "8161:8161"   # web    http://boot2docker:8161/admin (admin:admin)
+
+rabbitmq:
+  image: rabbitmq:3.5.1-management
+  ports:
+    - "8080:15672"  # management port (guest:guest)
+    - "5672:5672"   # amqp port
+    - "25672:25672" # cluster port
+  environment:
+    - "RABBITMQ_NODENAME=my-rabbit"
+
