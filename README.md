@@ -1,5 +1,5 @@
-activator-akka-scala-seed
-=========================
+reactive-amq-rmq-bridge
+=======================
 This is a proof of concept for a bridge between ActiveMQ and RabbitMQ using Akka-Camel and Akka-Stream
 
 # Flows
