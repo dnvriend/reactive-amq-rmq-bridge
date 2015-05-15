@@ -121,9 +121,12 @@ class JmsProducer(queueName: String) extends Producer with Oneway with ActorLogg
     }
 
   override protected def produce: Receive = {
-    case OnNext(msg: Long)                      => super.produce(msg)
+    case OnNext(msg: Long)                      =>
+      inFlight += 1
+      super.produce(msg)
+      inFlight -= 1
     case msg: NoSerializationVerificationNeeded => super.produce(msg)
-    case OnComplete                             => stop()
+    case OnComplete                             => stop();
     case OnError(t)                             => stop()
     case m                                      => log.info("[Dropping]: {}", m)
   }
