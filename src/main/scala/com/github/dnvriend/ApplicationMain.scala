@@ -29,10 +29,9 @@ object ApplicationMain extends App {
 
   // generate numbers every 1 second
   val getallenSource: Source[Long, Unit] =
-    Source(0 to 1000)
+    Source(() => Iterator from 0)
       .buffer(1, OverflowStrategy.backpressure)
-      .map(x => x)
-//      .map(x => { Thread.sleep(1000); x } )
+      .map(x => { Thread.sleep(1000); x } )
 
   // 1st RunnableFlow: send to AMQ
   getallenSource.log("send to amq").runWith(Sink.actorSubscriber(Props(new JmsProducer(queueName))))
