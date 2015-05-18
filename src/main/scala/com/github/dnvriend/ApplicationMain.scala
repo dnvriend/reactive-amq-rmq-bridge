@@ -29,9 +29,10 @@ object ApplicationMain extends App {
 
   // generate numbers every 1 second
   val getallenSource: Source[Long, Unit] =
-    Source(() => Iterator from 0)
+    Source(0 to 1000)
       .buffer(1, OverflowStrategy.backpressure)
-      .map(x => { Thread.sleep(1000); x } )
+      .map(x => x)
+//      .map(x => { Thread.sleep(1000); x } )
 
   // 1st RunnableFlow: send to AMQ
   getallenSource.log("send to amq").runWith(Sink.actorSubscriber(Props(new JmsProducer(queueName))))
@@ -115,12 +116,14 @@ class JmsProducer(queueName: String) extends Producer with Oneway with ActorLogg
 
   override protected def requestStrategy: RequestStrategy = ZeroRequestStrategy
 
+
+
   request(1)
 
   override protected def produce: Receive = {
     case OnNext(msg: Long)                      => super.produce(msg); request(1)
     case msg: NoSerializationVerificationNeeded => super.produce(msg)
-    case OnComplete                             => stop();
+    case OnComplete                             => //stop(); // when we stop the actor, buffered messages will not be sent to the broker
     case OnError(t)                             => stop()
     case m                                      => log.info("[Dropping]: {}", m)
   }
